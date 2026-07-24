@@ -318,7 +318,7 @@ export class TunnelRenderer {
     const w = 150;
     const h = 92;
     const px = this.W - w - 14;
-    const py = 14;
+    const py = this.H - h - 14;
     const f = this._plotFrame(px, py, w, h, "Cp (-Cp vs x/c)");
     const x0 = f.x + 8;
     const y0 = f.y + 18;
@@ -366,7 +366,7 @@ export class TunnelRenderer {
     const w = 150;
     const h = 92;
     const px = this.W - w - 14;
-    const py = 14 + 92 + 8;
+    const py = this.H - h - 14 - 92 - 8;
     const f = this._plotFrame(px, py, w, h, "Cl vs α");
     const x0 = f.x + 8;
     const y0 = f.y + 16;

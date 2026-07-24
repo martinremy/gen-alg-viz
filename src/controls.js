@@ -12,10 +12,16 @@ export function setupControls(state, onChange) {
     state.wLift = +$("slLift").value;
     state.wDrag = +$("slDrag").value;
     state.stallTarget = (+$("slStall").value) * DEG;
+    $("vAlpha").textContent = (+$("slAlpha").value).toFixed(1);
+    $("vLift").textContent = state.wLift.toFixed(2);
+    $("vDrag").textContent = state.wDrag.toFixed(2);
+    $("vStall").textContent = $("slStall").value;
   };
   const readEvolution = () => {
     state.mutationRate = +$("slMutation").value;
     state.speed = +$("slSpeed").value;
+    $("vMutation").textContent = state.mutationRate.toFixed(2);
+    $("vSpeed").textContent = state.speed.toFixed(1);
   };
 
   readObjective();
