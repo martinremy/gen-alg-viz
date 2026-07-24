@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Airfoil Evolution Lab</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0f1f;
+      --panel: #131a31;
+      --panel-2: #0f1630;
+      --border: #273054;
+      --accent: #45f4b9;
+      --accent-2: #7dd3fc;
+      --text: #dbe7ff;
+      --muted: #90a3d1;
+      --danger: #ff6b81;
+      --warn: #ffd166;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(ellipse at top, #182042 0%, var(--bg) 60%);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 12px;
+      gap: 10px;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: color-mix(in oklab, var(--panel) 90%, black);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 14px;
+    }
+    .title { font-weight: 700; letter-spacing: 0.2px; font-size: 1.05rem; }
+    .stats { display: flex; flex-wrap: wrap; gap: 10px 18px; color: var(--muted); font-size: 0.92rem; }
+    .stat strong { color: var(--text); }
+
+    main {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: 55fr 45fr;
+      gap: 10px;
+    }
+    .pane {
+      position: relative;
+      min-height: 0;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background:
+        radial-gradient(circle at 30% 20%, rgba(125, 211, 252, 0.06), transparent 35%),
+        radial-gradient(circle at 75% 80%, rgba(69, 244, 185, 0.06), transparent 35%),
+        var(--panel-2);
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .pane-label {
+      position: absolute;
+      top: 8px;
+      left: 12px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+    .readouts {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      pointer-events: none;
+    }
+    .readouts span strong { color: var(--text); }
+
+    footer {
+      background: color-mix(in oklab, var(--panel) 90%, black);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 14px 18px;
+    }
+    fieldset {
+      border: 1px solid #2b3763;
+      border-radius: 12px;
+      padding: 8px 12px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    legend { color: var(--muted); font-size: 0.74rem; padding: 0 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .ctl { display: flex; align-items: center; gap: 8px; font-size: 0.86rem; color: var(--muted); }
+    .ctl label { min-width: 84px; }
+    .ctl input[type="range"] { width: 120px; accent-color: var(--accent); }
+    .ctl .val { min-width: 46px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+    button {
+      background: #1d2646; color: var(--text);
+      border: 1px solid #304071; border-radius: 10px;
+      padding: 7px 12px; cursor: pointer;
+      transition: 140ms transform ease, 140ms background ease;
+    }
+    button:hover { transform: translateY(-1px); background: #26325d; }
+    button:active { transform: translateY(0); }
+    button.primary {
+      background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+      border: none; color: #04131f; font-weight: 700;
+    }
+    .checks { display: flex; align-items: center; gap: 8px; font-size: 0.86rem; color: var(--muted); }
+    .checks input { accent-color: var(--accent); }
+    .btns { display: flex; gap: 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="title">🛩️ Airfoil Evolution Lab</div>
+      <div class="stats">
+        <span class="stat">Generation: <strong id="statGeneration">0</strong></span>
+        <span class="stat">Avg fitness: <strong id="statAvgFitness">—</strong></span>
+        <span class="stat">Best fitness: <strong id="statBestFitness">—</strong></span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="pane" id="tunnelPane">
+      <div class="pane-label">Wind Tunnel</div>
+      <div class="readouts">
+        <span>Cl: <strong id="rCl">—</strong></span>
+        <span>Cd: <strong id="rCd">—</strong></span>
+        <span>L/D: <strong id="rLD">—</strong></span>
+        <span>Camber: <strong id="rCamber">—</strong></span>
+        <span>Thickness: <strong id="rThickness">—</strong></span>
+        <span>α_crit: <strong id="rAlphaCrit">—</strong></span>
+      </div>
+      <canvas id="tunnelCanvas"></canvas>
+    </section>
+
+    <section class="pane" id="zooPane">
+      <div class="pane-label">Population Zoo</div>
+      <canvas id="zooCanvas"></canvas>
+    </section>
+  </main>
+
+  <footer>
+    <fieldset>
+      <legend>Flight objective</legend>
+      <div class="ctl">
+        <label for="slAlpha">Cruise α (°)</label>
+        <input type="range" id="slAlpha" min="0" max="16" step="0.5" value="4" />
+        <span class="val" id="vAlpha">4.0</span>
+      </div>
+      <div class="ctl">
+        <label for="slLift">Lift weight</label>
+        <input type="range" id="slLift" min="0" max="1" step="0.05" value="0.5" />
+        <span class="val" id="vLift">0.50</span>
+      </div>
+      <div class="ctl">
+        <label for="slDrag">Drag weight</label>
+        <input type="range" id="slDrag" min="0" max="1" step="0.05" value="0.5" />
+        <span class="val" id="vDrag">0.50</span>
+      </div>
+      <div class="ctl">
+        <label for="slStall">Stall target (°)</label>
+        <input type="range" id="slStall" min="4" max="20" step="1" value="12" />
+        <span class="val" id="vStall">12</span>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Evolution</legend>
+      <div class="ctl">
+        <label for="slMutation">Mutation</label>
+        <input type="range" id="slMutation" min="0" max="0.4" step="0.01" value="0.08" />
+        <span class="val" id="vMutation">0.08</span>
+      </div>
+      <div class="ctl">
+        <label for="slSpeed">Speed (gen/s)</label>
+        <input type="range" id="slSpeed" min="0.2" max="8" step="0.2" value="2" />
+        <span class="val" id="vSpeed">2.0</span>
+      </div>
+      <div class="btns">
+        <button class="primary" id="btnPlayPause">Pause</button>
+        <button id="btnStep">Step</button>
+        <button id="btnReset">Reset</button>
+      </div>
+    </fieldset>
+
+    <div class="checks">
+      <input type="checkbox" id="chkSkeleton" />
+      <label for="chkSkeleton">Show control-point skeleton</label>
+    </div>
+  </footer>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
