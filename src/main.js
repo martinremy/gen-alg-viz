@@ -1,22 +1,198 @@
-// Smoke-only bootstrap. Later tasks replace this with the real app loop.
-const canvas = document.getElementById("tunnelCanvas");
-const ctx = canvas.getContext("2d");
+// Bootstrap: builds the fixed fitness references, initializes the population,
+// runs the render loop (tunnel animates every frame; generations advance on a
+// fixed cadence), wires controls, and updates the DOM stats/readouts.
 
-function drawPlaceholder() {
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.floor(rect.width * dpr);
-  canvas.height = Math.floor(rect.height * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, rect.width, rect.height);
-  ctx.fillStyle = "#45f4b9";
-  ctx.fillRect(rect.width * 0.35, rect.height * 0.4, rect.width * 0.3, rect.height * 0.2);
-  ctx.fillStyle = "#04131f";
-  ctx.font = "16px ui-sans-serif, system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("airfoil-lab boot", rect.width * 0.5, rect.height * 0.52);
+import { setupControls } from "./controls.js";
+import { initPopulation, evaluatePopulation, evolve } from "./ga.js";
+import { computeReferences, estimateAlphaCrit } from "./aero.js";
+import { repairGenome, genomeToPanels } from "./genome.js";
+import { TunnelRenderer } from "./viz/tunnel.js";
+import { ZooRenderer } from "./viz/zoo.js";
+
+const DEG = 180 / Math.PI;
+const POP_SIZE = 14;
+const REF_ALPHA = 4 * Math.PI / 180;
+
+const tunnelCanvas = document.getElementById("tunnelCanvas");
+const zooCanvas = document.getElementById("zooCanvas");
+const tunnelCtx = tunnelCanvas.getContext("2d");
+const zooCtx = zooCanvas.getContext("2d");
+
+const tunnel = new TunnelRenderer(tunnelCanvas, tunnelCtx);
+const zoo = new ZooRenderer(zooCanvas, zooCtx);
+
+// Fixed reference airfoil: 6 control points per surface, symmetric.
+function refGenome() {
+  const g = {
+    upper: [
+      { x: 0, y: 0 },
+      { x: 0.2, y: 0.05 },
+      { x: 0.4, y: 0.07 },
+      { x: 0.6, y: 0.07 },
+      { x: 0.8, y: 0.05 },
+      { x: 1, y: 0 },
+    ],
+    lower: [
+      { x: 0, y: 0 },
+      { x: 0.2, y: -0.05 },
+      { x: 0.4, y: -0.06 },
+      { x: 0.6, y: -0.06 },
+      { x: 0.8, y: -0.04 },
+      { x: 1, y: 0 },
+    ],
+  };
+  return repairGenome(g);
 }
 
-console.log("airfoil-lab boot");
-drawPlaceholder();
-window.addEventListener("resize", drawPlaceholder);
+const refs = computeReferences(genomeToPanels(refGenome(), 60), REF_ALPHA);
+
+const state = {
+  cruiseAlpha: REF_ALPHA,
+  wLift: 0.5,
+  wDrag: 0.5,
+  stallTarget: 12 * Math.PI / 180,
+  mutationRate: 0.08,
+  speed: 1.5,
+  playing: true,
+  showSkeleton: false,
+  stepOnce: false,
+};
+
+let population = initPopulation(POP_SIZE, Math.random);
+let metrics = null;
+let fitnesses = null;
+let generation = 0;
+let selectedIndex = 0;
+let bestIndex = 0;
+let genAccum = 0; // seconds toward next generation
+let lastT = performance.now();
+
+function currentOpts() {
+  return {
+    cruiseAlpha: state.cruiseAlpha,
+    wLift: state.wLift,
+    wDrag: state.wDrag,
+    stallTarget: state.stallTarget,
+  };
+}
+
+function evaluate() {
+  const res = evaluatePopulation(population, currentOpts(), refs);
+  fitnesses = res.fitnesses;
+  metrics = res.metrics;
+  // Best index.
+  bestIndex = 0;
+  let bf = -Infinity;
+  for (let i = 0; i < fitnesses.length; i += 1) {
+    if (fitnesses[i] > bf) {
+      bf = fitnesses[i];
+      bestIndex = i;
+    }
+  }
+  if (selectedIndex < 0 || selectedIndex >= population.length) selectedIndex = bestIndex;
+  tunnel.setAirfoil(population[selectedIndex], state.cruiseAlpha);
+}
+
+function evolveOne() {
+  population = evolve(
+    population,
+    fitnesses,
+    { eliteCount: 2, tournamentSize: 3, mutationRate: state.mutationRate },
+    Math.random,
+  );
+  generation += 1;
+  evaluate();
+}
+
+function reset() {
+  population = initPopulation(POP_SIZE, Math.random);
+  generation = 0;
+  selectedIndex = 0;
+  genAccum = 0;
+  evaluate();
+}
+
+setupControls(state, (kind) => {
+  if (kind === "objective") {
+    // Re-evaluate current population with new objective; keep tunnel in sync.
+    evaluate();
+  } else if (kind === "reset") {
+    reset();
+  } else if (kind === "action") {
+    if (state.stepOnce && !state.playing) {
+      evolveOne();
+      state.stepOnce = false;
+    }
+  }
+  // "evolution" param changes apply on the next generation; nothing to do now.
+});
+
+// Zoo click selects a candidate for the wind tunnel.
+zooCanvas.addEventListener("click", (e) => {
+  const rect = zooCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const n = population.length;
+  const { cols, rows } = zoo._layout(n);
+  const pad = 8;
+  const cellW = (zoo.W - pad * (cols + 1)) / cols;
+  const cellH = (zoo.H - pad * (rows + 1)) / rows;
+  for (let i = 0; i < n; i += 1) {
+    const r = Math.floor(i / cols);
+    const c = i % cols;
+    const x = pad + c * (cellW + pad);
+    const y = pad + r * (cellH + pad);
+    if (mx >= x && mx <= x + cellW && my >= y && my <= y + cellH) {
+      selectedIndex = i;
+      tunnel.setAirfoil(population[i], state.cruiseAlpha);
+      return;
+    }
+  }
+});
+
+window.addEventListener("resize", () => {
+  tunnel.resize();
+  zoo.resize();
+});
+
+function updateStats() {
+  document.getElementById("statGeneration").textContent = String(generation);
+  let sum = 0;
+  for (const f of fitnesses) sum += f;
+  document.getElementById("statAvgFitness").textContent = (sum / fitnesses.length).toFixed(3);
+  document.getElementById("statBestFitness").textContent =
+    fitnesses[bestIndex].toFixed(3);
+  // Tunnel readouts for the selected airfoil.
+  const m = metrics[selectedIndex];
+  const a = tunnel.airfoil;
+  document.getElementById("rCl").textContent = (a && a.cl != null ? a.cl : 0).toFixed(3);
+  const cp = a && a.polar ? a.polar.find((p) => Math.abs(p.alpha - state.cruiseAlpha) < 1e-6) : null;
+  const cd = cp ? cp.cd : 0;
+  document.getElementById("rCd").textContent = cd.toFixed(4);
+  document.getElementById("rLD").textContent = cd > 1e-6 ? (a.cl / cd).toFixed(2) : "0";
+  document.getElementById("rCamber").textContent = (m.features.camber * 100).toFixed(1) + "%";
+  document.getElementById("rThickness").textContent = (m.features.thickness * 100).toFixed(1) + "%";
+  document.getElementById("rAlphaCrit").textContent = (estimateAlphaCrit(m.features) * DEG).toFixed(0) + "°";
+}
+
+evaluate();
+
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+  // Generation cadence (decoupled from render).
+  if (state.playing) {
+    genAccum += dt;
+    const period = 1 / Math.max(0.1, state.speed);
+    if (genAccum >= period) {
+      genAccum -= period;
+      evolveOne();
+    }
+  }
+  tunnel.update(dt);
+  tunnel.render(state.showSkeleton);
+  zoo.render(population, metrics, selectedIndex, bestIndex);
+  updateStats();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
