@@ -68,7 +68,9 @@ export function evaluatePolar(panels, features) {
 }
 
 // Linear interpolation of cl / cd at an arbitrary alpha within the sweep.
-function interpAtPolar(polar, alpha) {
+// Exported so the UI can read Cl/Cd/L-D at the (continuous) cruise alpha even
+// when it falls between sweep points.
+export function polarPoint(polar, alpha) {
   if (alpha <= polar[0].alpha) return { cl: polar[0].cl, cd: polar[0].cd };
   if (alpha >= polar[polar.length - 1].alpha) {
     const last = polar[polar.length - 1];
@@ -89,7 +91,7 @@ function interpAtPolar(polar, alpha) {
 // fitness scale stable as the user moves the cruise-alpha slider.
 export function computeFitness(polar, features, opts, refs) {
   const { cruiseAlpha, wLift, wDrag, stallTarget } = opts;
-  const { cl, cd } = interpAtPolar(polar, cruiseAlpha);
+  const { cl, cd } = polarPoint(polar, cruiseAlpha);
   const ld = cd > 1e-6 ? cl / cd : 0;
   const ldNorm = clamp(ld / (refs.LD_REF || 1), 0, 1);
   const clNorm = clamp(cl / (refs.CL_REF || 1), 0, 1);

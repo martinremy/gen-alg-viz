@@ -4,7 +4,7 @@
 // by main.js). Imports the DOM-free numerical core.
 
 import { analyzeAirfoil } from "../panel.js";
-import { evaluatePolar, estimateAlphaCrit } from "../aero.js";
+import { evaluatePolar, estimateAlphaCrit, polarPoint } from "../aero.js";
 import { genomeToPanels, genomeFeatures } from "../genome.js";
 
 const DEG = 180 / Math.PI;
@@ -237,15 +237,15 @@ export class TunnelRenderer {
     // Aerodynamic center ~ quarter chord.
     const cx = this._ax(0.25);
     const cy = this._ay(0);
-    const cl = a.cl;
+    const pp = polarPoint(a.polar, alpha);
+    const cl = pp.cl;
+    const cdv = pp.cd;
     const scale = 60;
     // Lift perpendicular to freestream: (-sin a, cos a) (screen y flipped).
     const lx = -Math.sin(alpha) * cl * scale;
     const ly = -Math.cos(alpha) * cl * scale;
     this._arrow(cx, cy, cx + lx, cy + ly, "#45f4b9", `L=${cl.toFixed(2)}`);
     // Drag along freestream (tiny proxy): along +x.
-    const cd = a.polar.find((p) => Math.abs(p.alpha - alpha) < 1e-6);
-    const cdv = cd ? cd.cd : 0;
     this._arrow(cx, cy, cx + cdv * scale * 6, cy, "#ff9f6b", `D=${cdv.toFixed(3)}`);
   }
 

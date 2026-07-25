@@ -4,7 +4,7 @@
 
 import { setupControls } from "./controls.js";
 import { initPopulation, evaluatePopulation, evolve } from "./ga.js";
-import { computeReferences, estimateAlphaCrit } from "./aero.js";
+import { computeReferences, estimateAlphaCrit, polarPoint } from "./aero.js";
 import { repairGenome, genomeToPanels } from "./genome.js";
 import { TunnelRenderer } from "./viz/tunnel.js";
 import { ZooRenderer } from "./viz/zoo.js";
@@ -165,11 +165,11 @@ function updateStats() {
   // Tunnel readouts for the selected airfoil.
   const m = metrics[selectedIndex];
   const a = tunnel.airfoil;
-  document.getElementById("rCl").textContent = (a && a.cl != null ? a.cl : 0).toFixed(3);
-  const cp = a && a.polar ? a.polar.find((p) => Math.abs(p.alpha - state.cruiseAlpha) < 1e-6) : null;
-  const cd = cp ? cp.cd : 0;
+  const pp = a && a.polar ? polarPoint(a.polar, state.cruiseAlpha) : { cl: 0, cd: 0 };
+  document.getElementById("rCl").textContent = pp.cl.toFixed(3);
+  const cd = pp.cd;
   document.getElementById("rCd").textContent = cd.toFixed(4);
-  document.getElementById("rLD").textContent = cd > 1e-6 ? (a.cl / cd).toFixed(2) : "0";
+  document.getElementById("rLD").textContent = cd > 1e-6 ? (pp.cl / cd).toFixed(2) : "0";
   document.getElementById("rCamber").textContent = (m.features.camber * 100).toFixed(1) + "%";
   document.getElementById("rThickness").textContent = (m.features.thickness * 100).toFixed(1) + "%";
   document.getElementById("rAlphaCrit").textContent = (estimateAlphaCrit(m.features) * DEG).toFixed(0) + "°";
