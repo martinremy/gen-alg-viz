@@ -3,7 +3,7 @@
 // fixed cadence), wires controls, and updates the DOM stats/readouts.
 
 import { setupControls } from "./controls.js";
-import { initPopulation, evaluatePopulation, evolve } from "./ga.js";
+import { initPopulation, evaluatePopulation, evolveWithLineage } from "./ga.js";
 import { computeReferences, estimateAlphaCrit, polarPoint } from "./aero.js";
 import { repairGenome, genomeToPanels } from "./genome.js";
 import { TunnelRenderer } from "./viz/tunnel.js";
@@ -64,6 +64,8 @@ let fitnesses = null;
 let generation = 0;
 let selectedIndex = 0;
 let bestIndex = 0;
+let lineage = null;
+let genChangeTime = 0;
 let genAccum = 0; // seconds toward next generation
 let lastT = performance.now();
 
@@ -94,13 +96,16 @@ function evaluate() {
 }
 
 function evolveOne() {
-  population = evolve(
+  const res = evolveWithLineage(
     population,
     fitnesses,
     { eliteCount: 2, tournamentSize: 3, mutationRate: state.mutationRate },
     Math.random,
   );
+  population = res.population;
+  lineage = res.lineage;
   generation += 1;
+  genChangeTime = performance.now();
   evaluate();
 }
 
@@ -109,6 +114,8 @@ function reset() {
   generation = 0;
   selectedIndex = 0;
   genAccum = 0;
+  lineage = null;
+  genChangeTime = 0;
   evaluate();
 }
 
@@ -191,7 +198,8 @@ function loop(now) {
   }
   tunnel.update(dt);
   tunnel.render(state.showSkeleton);
-  zoo.render(population, metrics, selectedIndex, bestIndex);
+  const genAge = genChangeTime > 0 ? (now - genChangeTime) / 1000 : 0;
+  zoo.render(population, metrics, selectedIndex, bestIndex, lineage, genAge);
   updateStats();
   requestAnimationFrame(loop);
 }

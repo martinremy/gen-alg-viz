@@ -142,8 +142,12 @@ export class TunnelRenderer {
 
   render(showSkeleton) {
     const ctx = this.ctx;
-    ctx.clearRect(0, 0, this.W, this.H);
-    this._drawBackground();
+    // Fade-trail: paint a low-alpha background over the previous frame so old
+    // streamline segments persist and decay into smooth streaks instead of
+    // strobing each frame. Airfoil/plots are redrawn opaquely on top below.
+    ctx.fillStyle = "rgba(10,15,31,0.20)";
+    ctx.fillRect(0, 0, this.W, this.H);
+    this._drawGrid();
     if (this.airfoil) {
       this._drawStreamlines();
       this._drawAirfoil(showSkeleton);
@@ -154,11 +158,9 @@ export class TunnelRenderer {
     }
   }
 
-  _drawBackground() {
+  _drawGrid() {
     const ctx = this.ctx;
-    ctx.fillStyle = "#0a0f1f";
-    ctx.fillRect(this.flowX, this.flowY, this.flowW, this.flowH);
-    ctx.strokeStyle = "rgba(125,211,252,0.06)";
+    ctx.strokeStyle = "rgba(125,211,252,0.05)";
     ctx.lineWidth = 1;
     for (let x = 0; x <= 1; x += 0.25) {
       ctx.beginPath();
@@ -192,7 +194,7 @@ export class TunnelRenderer {
     ctx.moveTo(this._ax(pts[0].x), this._ay(pts[0].y));
     for (let i = 1; i < N; i += 1) ctx.lineTo(this._ax(pts[i].x), this._ay(pts[i].y));
     ctx.closePath();
-    ctx.fillStyle = "rgba(10,15,31,0.85)";
+    ctx.fillStyle = "#0a0f1f";
     ctx.fill();
     // Surface colored by Cp, per panel.
     if (cp) {
@@ -300,7 +302,7 @@ export class TunnelRenderer {
 
   _plotFrame(x, y, w, h, title) {
     const ctx = this.ctx;
-    ctx.fillStyle = "rgba(8,12,26,0.78)";
+    ctx.fillStyle = "#080c1a";
     ctx.fillRect(x, y, w, h);
     ctx.strokeStyle = "rgba(125,211,252,0.25)";
     ctx.lineWidth = 1;

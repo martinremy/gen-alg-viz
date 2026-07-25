@@ -51,32 +51,37 @@ export function tournamentSelect(fitnesses, k, rng = Math.random) {
   return best;
 }
 
-// Evolve one generation. Top `eliteCount` genomes carry over by reference; the
-// rest are bred via tournament selection + crossover + mutation.
-export function evolve(population, fitnesses, params, rng = Math.random) {
+// Evolve one generation, returning the new population plus a lineage record
+// (one entry per child) so the UI can visualize the pairwise operations:
+//   lineage[i] = { kind: "elite" | "bred", parents: [idxOld, ...], mutated: bool }
+// For "bred", parents are the two tournament-selected indices in the OLD pop.
+export function evolveWithLineage(population, fitnesses, params, rng = Math.random) {
   const size = population.length;
   const { eliteCount, tournamentSize, mutationRate } = params;
 
-  // Rank by fitness.
   const order = fitnesses
     .map((f, i) => [f, i])
     .sort((a, b) => b[0] - a[0]);
-  const eliteIdx = new Set(order.slice(0, eliteCount).map((o) => o[1]));
 
   const next = [];
+  const lineage = [];
   // Elites carry over unchanged (by reference).
-  for (const o of order.slice(0, eliteCount)) next.push(population[o[1]]);
-
-  // Breed the rest.
+  for (const o of order.slice(0, eliteCount)) {
+    next.push(population[o[1]]);
+    lineage.push({ kind: "elite", parents: [o[1]], mutated: false });
+  }
+  // Breed the rest, recording parentage.
   while (next.length < size) {
     const ai = tournamentSelect(fitnesses, tournamentSize, rng);
     const bi = tournamentSelect(fitnesses, tournamentSize, rng);
     const child = crossover(population[ai], population[bi], rng);
     next.push(mutate(child, mutationRate, rng));
+    lineage.push({ kind: "bred", parents: [ai, bi], mutated: mutationRate > 0 });
   }
+  return { population: next, lineage };
+}
 
-  // Defensive: elites set is not strictly needed beyond ordering, but keep the
-  // contract explicit (elites first, unchanged).
-  void eliteIdx;
-  return next;
+// Thin wrapper for callers/tests that only want the population array.
+export function evolve(population, fitnesses, params, rng = Math.random) {
+  return evolveWithLineage(population, fitnesses, params, rng).population;
 }

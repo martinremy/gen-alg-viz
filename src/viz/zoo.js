@@ -8,6 +8,14 @@ import { genomeFeatures, genomeToPanels } from "../genome.js";
 const DISPLAY_ALPHA = 4 * Math.PI / 180;
 const STREAMLINES = 9;
 const STEPS = 48;
+const LINEAGE_DUR = 1.3; // seconds the pairwise-ops overlay stays visible
+
+function lineageAlpha(age) {
+  if (age <= 0) return 0;
+  if (age < 0.12) return age / 0.12; // fade in
+  if (age < LINEAGE_DUR) return 1 - (age - 0.12) / (LINEAGE_DUR - 0.12); // fade out
+  return 0;
+}
 
 // Trace a static streamline through a velocity field from a starting point.
 function traceStreamline(field, x0, y0) {
@@ -86,7 +94,7 @@ export class ZooRenderer {
     return entry;
   }
 
-  render(population, metrics, selectedIndex, bestIndex) {
+  render(population, metrics, selectedIndex, bestIndex, lineage, genAge) {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.W, this.H);
     const n = population.length;
@@ -95,6 +103,7 @@ export class ZooRenderer {
     const pad = 8;
     const cellW = (this.W - pad * (cols + 1)) / cols;
     const cellH = (this.H - pad * (rows + 1)) / rows;
+    this._cells = { cols, rows, cellW, cellH, pad };
     // Fitness normalization for framing.
     let fmin = Infinity;
     let fmax = -Infinity;
@@ -113,6 +122,63 @@ export class ZooRenderer {
       const fnorm = (metrics[i].fitness - fmin) / frange; // 0..1
       this._drawCell(x, y, cellW, cellH, data, fnorm, i === selectedIndex, i === bestIndex);
     }
+    if (lineage && genAge != null && genAge < LINEAGE_DUR) {
+      this._drawLineage(lineage, genAge);
+    }
+  }
+
+  _cellCenter(i) {
+    const { cols, cellW, cellH, pad } = this._cells;
+    const r = Math.floor(i / cols);
+    const c = i % cols;
+    return {
+      x: pad + c * (cellW + pad) + cellW / 2,
+      y: pad + r * (cellH + pad) + cellH / 2,
+    };
+  }
+
+  // Visualize the pairwise GA operations: for each child, draw curves from its
+  // parents' old cell positions to the child cell. Crossover => two cyan curves;
+  // mutated => dashed amber; elites => a small green ring (carried over, no parents).
+  _drawLineage(lineage, genAge) {
+    const ctx = this.ctx;
+    const a = lineageAlpha(genAge);
+    if (a <= 0) return;
+    for (let k = 0; k < lineage.length; k += 1) {
+      const e = lineage[k];
+      if (!e) continue;
+      const child = this._cellCenter(k);
+      if (e.kind === "elite") {
+        ctx.strokeStyle = `rgba(69,244,185,${0.7 * a})`;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(child.x, child.y, Math.min(this._cells.cellW, this._cells.cellH) * 0.42, 0, Math.PI * 2);
+        ctx.stroke();
+        continue;
+      }
+      // bred: two parent curves
+      for (const pi of e.parents) {
+        const parent = this._cellCenter(pi);
+        const mx = (parent.x + child.x) / 2;
+        const my = (parent.y + child.y) / 2 - this._cells.cellH * 0.35;
+        ctx.strokeStyle = e.mutated
+          ? `rgba(255,159,107,${0.55 * a})`
+          : `rgba(125,211,252,${0.6 * a})`;
+        ctx.lineWidth = 1.3;
+        ctx.setLineDash(e.mutated ? [4, 3] : []);
+        ctx.beginPath();
+        ctx.moveTo(parent.x, parent.y);
+        ctx.quadraticCurveTo(mx, my, child.x, child.y);
+        ctx.stroke();
+      }
+      // child node
+      ctx.setLineDash([]);
+      ctx.fillStyle = e.mutated ? `rgba(255,159,107,${0.9 * a})` : `rgba(125,211,252,${0.9 * a})`;
+      ctx.beginPath();
+      ctx.arc(child.x, child.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.setLineDash([]);
   }
 
   _drawCell(x, y, w, h, data, fnorm, selected, best) {
